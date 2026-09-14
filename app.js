@@ -42,6 +42,7 @@ const elements = {
 };
 
 const desktopQuery = window.matchMedia("(min-width: 780px) and (hover: hover) and (pointer: fine)");
+const fullscreenSupported = Boolean(document.fullscreenEnabled && document.documentElement.requestFullscreen);
 const MIN_ZOOM = 1;
 const MAX_ZOOM = 5;
 const ZOOM_STEP = 0.25;
@@ -287,10 +288,11 @@ elements.stage.addEventListener("wheel", (event) => {
 }, { passive: false });
 
 elements.fullscreen.addEventListener("click", async () => {
+  if (!fullscreenSupported) return;
   try {
     if (!document.fullscreenElement) {
       fitPageToViewport();
-      await document.documentElement.requestFullscreen();
+      await document.documentElement.requestFullscreen({ navigationUI: "hide" });
     } else {
       await document.exitFullscreen();
     }
@@ -353,7 +355,6 @@ elements.stage.addEventListener("pointerdown", (event) => {
     beginZoomInteraction();
     return;
   }
-  beginZoomInteraction();
   elements.stage.setPointerCapture(event.pointerId);
   pointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
 
@@ -361,6 +362,7 @@ elements.stage.addEventListener("pointerdown", (event) => {
     zoomState.lastX = event.clientX;
     zoomState.lastY = event.clientY;
   } else if (pointers.size === 2) {
+    beginZoomInteraction();
     beginPinch();
   }
 });
@@ -403,6 +405,7 @@ function finishPointer(event) {
   pointers.delete(event.pointerId);
   if (event.pointerType === "mouse") elements.book.classList.remove("dragging");
   if (pointers.size === 1) {
+    if (event.pointerType !== "mouse") settleZoom();
     const remaining = [...pointers.values()][0];
     zoomState.lastX = remaining.x;
     zoomState.lastY = remaining.y;
@@ -423,6 +426,7 @@ window.addEventListener("resize", () => {
 
 desktopQuery.addEventListener("change", () => render());
 
+elements.fullscreen.hidden = !fullscreenSupported;
 const requestedPage = Number(location.hash.match(/pagina-(\d+)/)?.[1]);
 if (Number.isInteger(requestedPage)) currentIndex = Math.max(0, Math.min(pages.length - 1, requestedPage - 1));
 render();
