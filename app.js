@@ -41,10 +41,61 @@ const elements = {
 const desktopQuery = window.matchMedia("(min-width: 780px)");
 let currentIndex = 0;
 let preferSpread = localStorage.getItem("hq-layout") !== "single";
-let touchStartX = 0;
-let touchStartY = 0;
-let singleTouchGesture = false;
 let transitionTimer;
+const pointers = new Map();
+const zoomState = {
+  scale: 1,
+  x: 0,
+  y: 0,
+  lastX: 0,
+  lastY: 0,
+  pinchDistance: 0,
+  pinchScale: 1,
+  pinchX: 0,
+  pinchY: 0,
+  pinchCenterX: 0,
+  pinchCenterY: 0
+};
+
+function applyZoom() {
+  elements.book.style.transform = `translate3d(${zoomState.x}px, ${zoomState.y}px, 0) scale(${zoomState.scale})`;
+  elements.book.classList.toggle("zoomed", zoomState.scale > 1.001);
+}
+
+function clampPan() {
+  if (zoomState.scale <= 1) {
+    zoomState.scale = 1;
+    zoomState.x = 0;
+    zoomState.y = 0;
+    return;
+  }
+
+  const rect = elements.book.getBoundingClientRect();
+  const baseWidth = rect.width / zoomState.scale;
+  const baseHeight = rect.height / zoomState.scale;
+  const maxX = Math.max(0, (baseWidth * zoomState.scale - elements.stage.clientWidth) / 2);
+  const maxY = Math.max(0, (baseHeight * zoomState.scale - elements.stage.clientHeight) / 2);
+  zoomState.x = Math.max(-maxX, Math.min(maxX, zoomState.x));
+  zoomState.y = Math.max(-maxY, Math.min(maxY, zoomState.y));
+}
+
+function resetZoom() {
+  pointers.clear();
+  zoomState.scale = 1;
+  zoomState.x = 0;
+  zoomState.y = 0;
+  applyZoom();
+}
+
+function beginPinch() {
+  const [first, second] = [...pointers.values()];
+  zoomState.pinchDistance = Math.hypot(second.x - first.x, second.y - first.y) || 1;
+  zoomState.pinchScale = zoomState.scale;
+  zoomState.pinchX = zoomState.x;
+  zoomState.pinchY = zoomState.y;
+  zoomState.pinchCenterX = (first.x + second.x) / 2;
+  zoomState.pinchCenterY = (first.y + second.y) / 2;
+}
 
 function isSpread() {
   return desktopQuery.matches && preferSpread && currentIndex > 0;
@@ -82,6 +133,7 @@ function preloadAround(index) {
 }
 
 function render({ animate = false, direction = "forward" } = {}) {
+  resetZoom();
   currentIndex = Math.max(0, Math.min(pages.length - 1, spreadStart(currentIndex)));
   const spread = isSpread();
 
@@ -188,29 +240,72 @@ document.addEventListener("keydown", (event) => {
   }
 });
 
-elements.stage.addEventListener("touchstart", (event) => {
-  singleTouchGesture = event.touches.length === 1;
-  if (!singleTouchGesture) return;
-  const touch = event.changedTouches[0];
-  touchStartX = touch.clientX;
-  touchStartY = touch.clientY;
-}, { passive: true });
+elements.stage.addEventListener("pointerdown", (event) => {
+  if (event.pointerType === "mouse") return;
+  elements.stage.setPointerCapture(event.pointerId);
+  pointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
 
-elements.stage.addEventListener("touchmove", (event) => {
-  if (event.touches.length > 1) singleTouchGesture = false;
-}, { passive: true });
-
-elements.stage.addEventListener("touchend", (event) => {
-  if (!singleTouchGesture || event.touches.length > 0) return;
-  singleTouchGesture = false;
-  const touch = event.changedTouches[0];
-  const deltaX = touch.clientX - touchStartX;
-  const deltaY = touch.clientY - touchStartY;
-  if (Math.abs(deltaX) > 48 && Math.abs(deltaX) > Math.abs(deltaY) * 1.25) {
-    if (deltaX < 0) goNext();
-    else goPrevious();
+  if (pointers.size === 1) {
+    zoomState.lastX = event.clientX;
+    zoomState.lastY = event.clientY;
+  } else if (pointers.size === 2) {
+    beginPinch();
   }
-}, { passive: true });
+});
+
+elements.stage.addEventListener("pointermove", (event) => {
+  if (!pointers.has(event.pointerId)) return;
+  pointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
+
+  if (pointers.size === 1) {
+    if (zoomState.scale > 1) {
+      zoomState.x += event.clientX - zoomState.lastX;
+      zoomState.y += event.clientY - zoomState.lastY;
+      clampPan();
+      applyZoom();
+    }
+    zoomState.lastX = event.clientX;
+    zoomState.lastY = event.clientY;
+    return;
+  }
+
+  if (pointers.size >= 2) {
+    const [first, second] = [...pointers.values()];
+    const distance = Math.hypot(second.x - first.x, second.y - first.y);
+    const centerX = (first.x + second.x) / 2;
+    const centerY = (first.y + second.y) / 2;
+    const ratio = Math.max(1, Math.min(5, zoomState.pinchScale * distance / zoomState.pinchDistance)) / zoomState.pinchScale;
+    const stageRect = elements.stage.getBoundingClientRect();
+    const originX = stageRect.left + stageRect.width / 2;
+    const originY = stageRect.top + stageRect.height / 2;
+
+    zoomState.scale = zoomState.pinchScale * ratio;
+    zoomState.x = centerX - originX - (zoomState.pinchCenterX - originX - zoomState.pinchX) * ratio;
+    zoomState.y = centerY - originY - (zoomState.pinchCenterY - originY - zoomState.pinchY) * ratio;
+    clampPan();
+    applyZoom();
+  }
+});
+
+function finishPointer(event) {
+  pointers.delete(event.pointerId);
+  if (pointers.size === 1) {
+    const remaining = [...pointers.values()][0];
+    zoomState.lastX = remaining.x;
+    zoomState.lastY = remaining.y;
+  } else if (pointers.size >= 2) {
+    beginPinch();
+  }
+}
+
+elements.stage.addEventListener("pointerup", finishPointer);
+elements.stage.addEventListener("pointercancel", finishPointer);
+elements.stage.addEventListener("lostpointercapture", finishPointer);
+
+window.addEventListener("resize", () => {
+  clampPan();
+  applyZoom();
+});
 
 desktopQuery.addEventListener("change", () => render());
 
