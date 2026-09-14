@@ -1,0 +1,9 @@
+{
+  "name": "Rise of the Last Archdevil — Os Três Corações",
+  "short_name": "Last Archdevil",
+  "description": "Leitor digital da edição 12 da HQ Rise of the Last Archdevil.",
+  "start_url": "./",
+  "display": "standalone",
+  "background_color": "#09080c",
+  "theme_color": "#09080c"
+}
