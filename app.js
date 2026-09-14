@@ -43,6 +43,7 @@ let currentIndex = 0;
 let preferSpread = localStorage.getItem("hq-layout") !== "single";
 let touchStartX = 0;
 let touchStartY = 0;
+let singleTouchGesture = false;
 let transitionTimer;
 
 function isSpread() {
@@ -188,12 +189,20 @@ document.addEventListener("keydown", (event) => {
 });
 
 elements.stage.addEventListener("touchstart", (event) => {
+  singleTouchGesture = event.touches.length === 1;
+  if (!singleTouchGesture) return;
   const touch = event.changedTouches[0];
   touchStartX = touch.clientX;
   touchStartY = touch.clientY;
 }, { passive: true });
 
+elements.stage.addEventListener("touchmove", (event) => {
+  if (event.touches.length > 1) singleTouchGesture = false;
+}, { passive: true });
+
 elements.stage.addEventListener("touchend", (event) => {
+  if (!singleTouchGesture || event.touches.length > 0) return;
+  singleTouchGesture = false;
   const touch = event.changedTouches[0];
   const deltaX = touch.clientX - touchStartX;
   const deltaY = touch.clientY - touchStartY;
