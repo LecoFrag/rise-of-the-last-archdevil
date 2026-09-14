@@ -35,10 +35,16 @@ const elements = {
   label: document.querySelector("#pageLabel"),
   count: document.querySelector("#pageCount"),
   layout: document.querySelector("#layoutButton"),
+  zoomOut: document.querySelector("#zoomOutButton"),
+  zoomFit: document.querySelector("#zoomFitButton"),
+  zoomIn: document.querySelector("#zoomInButton"),
   fullscreen: document.querySelector("#fullscreenButton")
 };
 
 const desktopQuery = window.matchMedia("(min-width: 780px) and (hover: hover) and (pointer: fine)");
+const MIN_ZOOM = 1;
+const MAX_ZOOM = 5;
+const ZOOM_STEP = 0.25;
 let currentIndex = 0;
 let preferSpread = localStorage.getItem("hq-layout") !== "single";
 let transitionTimer;
@@ -60,11 +66,17 @@ const zoomState = {
 function applyZoom() {
   elements.book.style.transform = `translate3d(${zoomState.x}px, ${zoomState.y}px, 0) scale(${zoomState.scale})`;
   elements.book.classList.toggle("zoomed", zoomState.scale > 1.001);
+  const percentage = Math.round(zoomState.scale * 100);
+  elements.zoomOut.disabled = zoomState.scale <= MIN_ZOOM;
+  elements.zoomFit.disabled = zoomState.scale <= MIN_ZOOM;
+  elements.zoomIn.disabled = zoomState.scale >= MAX_ZOOM;
+  elements.zoomFit.setAttribute("aria-label", `Ajustar imagem à tela. Zoom atual: ${percentage}%`);
+  elements.zoomFit.title = `Ajustar imagem à tela — zoom atual: ${percentage}% (0)`;
 }
 
 function clampPan() {
-  if (zoomState.scale <= 1) {
-    zoomState.scale = 1;
+  if (zoomState.scale <= MIN_ZOOM) {
+    zoomState.scale = MIN_ZOOM;
     zoomState.x = 0;
     zoomState.y = 0;
     return;
@@ -79,8 +91,27 @@ function clampPan() {
   zoomState.y = Math.max(-maxY, Math.min(maxY, zoomState.y));
 }
 
+function setZoom(nextScale, clientX, clientY) {
+  const scale = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, nextScale));
+  if (Math.abs(scale - zoomState.scale) < 0.001) return;
+
+  const stageRect = elements.stage.getBoundingClientRect();
+  const originX = stageRect.left + stageRect.width / 2;
+  const originY = stageRect.top + stageRect.height / 2;
+  const focusX = clientX ?? originX;
+  const focusY = clientY ?? originY;
+  const ratio = scale / zoomState.scale;
+
+  zoomState.x = focusX - originX - (focusX - originX - zoomState.x) * ratio;
+  zoomState.y = focusY - originY - (focusY - originY - zoomState.y) * ratio;
+  zoomState.scale = scale;
+  clampPan();
+  applyZoom();
+}
+
 function resetZoom() {
   pointers.clear();
+  elements.book.classList.remove("dragging");
   zoomState.scale = 1;
   zoomState.x = 0;
   zoomState.y = 0;
@@ -217,6 +248,18 @@ elements.layout.addEventListener("click", () => {
   render();
 });
 
+elements.zoomOut.addEventListener("click", () => setZoom(zoomState.scale - ZOOM_STEP));
+elements.zoomFit.addEventListener("click", resetZoom);
+elements.zoomIn.addEventListener("click", () => setZoom(zoomState.scale + ZOOM_STEP));
+
+elements.stage.addEventListener("wheel", (event) => {
+  if (!desktopQuery.matches) return;
+  event.preventDefault();
+  const limitedDelta = Math.max(-120, Math.min(120, event.deltaY));
+  const factor = Math.exp(-limitedDelta * 0.002);
+  setZoom(zoomState.scale * factor, event.clientX, event.clientY);
+}, { passive: false });
+
 elements.fullscreen.addEventListener("click", async () => {
   try {
     if (!document.fullscreenElement) {
@@ -239,26 +282,50 @@ document.addEventListener("fullscreenchange", () => {
 });
 
 document.addEventListener("keydown", (event) => {
-  if (event.key === "ArrowRight" || event.key === "PageDown" || event.key === " ") {
+  const isControl = event.target instanceof HTMLButtonElement || event.target instanceof HTMLInputElement;
+  if (!isControl && (event.key === "ArrowRight" || event.key === "PageDown" || event.key === " ")) {
     event.preventDefault();
     goNext();
   }
-  if (event.key === "ArrowLeft" || event.key === "PageUp") {
+  if (!isControl && (event.key === "ArrowLeft" || event.key === "PageUp")) {
     event.preventDefault();
     goPrevious();
   }
-  if (event.key === "Home") {
+  if (!isControl && event.key === "Home") {
     currentIndex = 0;
     render({ animate: true, direction: "backward" });
   }
-  if (event.key === "End") {
+  if (!isControl && event.key === "End") {
     currentIndex = pages.length - 1;
     render({ animate: true, direction: "forward" });
+  }
+
+  if (!desktopQuery.matches || event.ctrlKey || event.metaKey || event.altKey || isControl) return;
+  if (event.key === "+" || event.key === "=") {
+    event.preventDefault();
+    setZoom(zoomState.scale + ZOOM_STEP);
+  }
+  if (event.key === "-") {
+    event.preventDefault();
+    setZoom(zoomState.scale - ZOOM_STEP);
+  }
+  if (event.key === "0") {
+    event.preventDefault();
+    resetZoom();
   }
 });
 
 elements.stage.addEventListener("pointerdown", (event) => {
-  if (event.pointerType === "mouse") return;
+  if (event.pointerType === "mouse") {
+    if (!desktopQuery.matches || event.button !== 0 || zoomState.scale <= MIN_ZOOM || event.target.closest("button")) return;
+    event.preventDefault();
+    elements.stage.setPointerCapture(event.pointerId);
+    pointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
+    zoomState.lastX = event.clientX;
+    zoomState.lastY = event.clientY;
+    elements.book.classList.add("dragging");
+    return;
+  }
   elements.stage.setPointerCapture(event.pointerId);
   pointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
 
@@ -291,7 +358,7 @@ elements.stage.addEventListener("pointermove", (event) => {
     const distance = Math.hypot(second.x - first.x, second.y - first.y);
     const centerX = (first.x + second.x) / 2;
     const centerY = (first.y + second.y) / 2;
-    const ratio = Math.max(1, Math.min(5, zoomState.pinchScale * distance / zoomState.pinchDistance)) / zoomState.pinchScale;
+    const ratio = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, zoomState.pinchScale * distance / zoomState.pinchDistance)) / zoomState.pinchScale;
     const stageRect = elements.stage.getBoundingClientRect();
     const originX = stageRect.left + stageRect.width / 2;
     const originY = stageRect.top + stageRect.height / 2;
@@ -306,6 +373,7 @@ elements.stage.addEventListener("pointermove", (event) => {
 
 function finishPointer(event) {
   pointers.delete(event.pointerId);
+  if (event.pointerType === "mouse") elements.book.classList.remove("dragging");
   if (pointers.size === 1) {
     const remaining = [...pointers.values()][0];
     zoomState.lastX = remaining.x;
