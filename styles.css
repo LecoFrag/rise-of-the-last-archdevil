@@ -219,7 +219,7 @@ input[type="range"] {
 
 .desktop-only { display: none; }
 
-@media (min-width: 780px) {
+@media (min-width: 780px) and (hover: hover) and (pointer: fine) {
   .reader { padding-inline: 1.25rem; }
   .desktop-only { display: inline-grid; }
   .page-turn { display: block; }

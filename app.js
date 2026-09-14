@@ -38,7 +38,7 @@ const elements = {
   fullscreen: document.querySelector("#fullscreenButton")
 };
 
-const desktopQuery = window.matchMedia("(min-width: 780px)");
+const desktopQuery = window.matchMedia("(min-width: 780px) and (hover: hover) and (pointer: fine)");
 let currentIndex = 0;
 let preferSpread = localStorage.getItem("hq-layout") !== "single";
 let transitionTimer;
