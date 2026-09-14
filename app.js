@@ -48,6 +48,7 @@ const ZOOM_STEP = 0.25;
 let currentIndex = 0;
 let preferSpread = localStorage.getItem("hq-layout") !== "single";
 let transitionTimer;
+let zoomSettleTimer;
 const pointers = new Map();
 const zoomState = {
   scale: 1,
@@ -64,7 +65,10 @@ const zoomState = {
 };
 
 function applyZoom() {
-  elements.book.style.transform = `translate3d(${zoomState.x}px, ${zoomState.y}px, 0) scale(${zoomState.scale})`;
+  const translate = elements.book.classList.contains("interacting")
+    ? `translate3d(${zoomState.x}px, ${zoomState.y}px, 0)`
+    : `translate(${zoomState.x}px, ${zoomState.y}px)`;
+  elements.book.style.transform = `${translate} scale(${zoomState.scale})`;
   elements.book.classList.toggle("zoomed", zoomState.scale > 1.001);
   const percentage = Math.round(zoomState.scale * 100);
   elements.zoomOut.disabled = zoomState.scale <= MIN_ZOOM;
@@ -72,6 +76,25 @@ function applyZoom() {
   elements.zoomIn.disabled = zoomState.scale >= MAX_ZOOM;
   elements.zoomFit.setAttribute("aria-label", `Ajustar imagem à tela. Zoom atual: ${percentage}%`);
   elements.zoomFit.title = `Ajustar imagem à tela — zoom atual: ${percentage}% (0)`;
+}
+
+function beginZoomInteraction() {
+  clearTimeout(zoomSettleTimer);
+  elements.book.classList.add("interacting");
+  applyZoom();
+}
+
+function settleZoom(delay = 0) {
+  clearTimeout(zoomSettleTimer);
+  const rerender = () => {
+    elements.book.classList.remove("interacting");
+    elements.book.style.transform = "none";
+    void elements.book.offsetWidth;
+    applyZoom();
+  };
+
+  if (delay > 0) zoomSettleTimer = setTimeout(rerender, delay);
+  else rerender();
 }
 
 function clampPan() {
@@ -110,8 +133,9 @@ function setZoom(nextScale, clientX, clientY) {
 }
 
 function resetZoom() {
+  clearTimeout(zoomSettleTimer);
   pointers.clear();
-  elements.book.classList.remove("dragging");
+  elements.book.classList.remove("dragging", "interacting");
   zoomState.scale = 1;
   zoomState.x = 0;
   zoomState.y = 0;
@@ -255,9 +279,11 @@ elements.zoomIn.addEventListener("click", () => setZoom(zoomState.scale + ZOOM_S
 elements.stage.addEventListener("wheel", (event) => {
   if (!desktopQuery.matches) return;
   event.preventDefault();
+  beginZoomInteraction();
   const limitedDelta = Math.max(-120, Math.min(120, event.deltaY));
   const factor = Math.exp(-limitedDelta * 0.002);
   setZoom(zoomState.scale * factor, event.clientX, event.clientY);
+  settleZoom(90);
 }, { passive: false });
 
 elements.fullscreen.addEventListener("click", async () => {
@@ -324,8 +350,10 @@ elements.stage.addEventListener("pointerdown", (event) => {
     zoomState.lastX = event.clientX;
     zoomState.lastY = event.clientY;
     elements.book.classList.add("dragging");
+    beginZoomInteraction();
     return;
   }
+  beginZoomInteraction();
   elements.stage.setPointerCapture(event.pointerId);
   pointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
 
@@ -381,6 +409,7 @@ function finishPointer(event) {
   } else if (pointers.size >= 2) {
     beginPinch();
   }
+  if (pointers.size === 0) settleZoom();
 }
 
 elements.stage.addEventListener("pointerup", finishPointer);
