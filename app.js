@@ -87,6 +87,17 @@ function resetZoom() {
   applyZoom();
 }
 
+function fitPageToViewport() {
+  resetZoom();
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => {
+      resetZoom();
+      clampPan();
+      applyZoom();
+    });
+  });
+}
+
 function beginPinch() {
   const [first, second] = [...pointers.values()];
   zoomState.pinchDistance = Math.hypot(second.x - first.x, second.y - first.y) || 1;
@@ -208,8 +219,12 @@ elements.layout.addEventListener("click", () => {
 
 elements.fullscreen.addEventListener("click", async () => {
   try {
-    if (!document.fullscreenElement) await document.documentElement.requestFullscreen();
-    else await document.exitFullscreen();
+    if (!document.fullscreenElement) {
+      fitPageToViewport();
+      await document.documentElement.requestFullscreen();
+    } else {
+      await document.exitFullscreen();
+    }
   } catch (_) {
     elements.fullscreen.hidden = true;
   }
@@ -217,8 +232,10 @@ elements.fullscreen.addEventListener("click", async () => {
 
 document.addEventListener("fullscreenchange", () => {
   const active = Boolean(document.fullscreenElement);
+  document.documentElement.classList.toggle("fullscreen-active", active);
   elements.fullscreen.setAttribute("aria-label", active ? "Sair da tela cheia" : "Abrir em tela cheia");
   elements.fullscreen.title = active ? "Sair da tela cheia" : "Tela cheia";
+  fitPageToViewport();
 });
 
 document.addEventListener("keydown", (event) => {
