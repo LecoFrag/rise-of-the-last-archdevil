@@ -19,7 +19,24 @@ const pages = [
   { file: "page-18.png", label: "Página 18" },
   { file: "page-19.png", label: "Página 19" },
   { file: "page-20.png", label: "Página 20" },
-  { file: "page-21.png", label: "Quarta capa" }
+  { file: "page-21.png", label: "Página 21" },
+  { file: "page-22.png", label: "Página 22" },
+  { file: "page-23.png", label: "Página 23" },
+  { file: "page-24.png", label: "Página 24" },
+  { file: "page-25.png", label: "Página 25" },
+  { file: "page-26.png", label: "Página 26" },
+  { file: "page-27.png", label: "Página 27" },
+  { file: "page-28.png", label: "Página 28" },
+  { file: "page-29.png", label: "Página 29" },
+  { file: "page-30.png", label: "Página 30" },
+  { file: "page-31.png", label: "Página 31" },
+  { file: "page-32.png", label: "Página 32" },
+  { file: "page-33.png", label: "Página 33" },
+  { file: "page-34.png", label: "Página 34" },
+  { file: "page-35.png", label: "Página 35" },
+  { file: "page-36.png", label: "Página 36" },
+  { file: "page-37.png", label: "Página 37" },
+  { file: "page-38.png", label: "Quarta capa" }
 ];
 
 const elements = {
@@ -202,7 +219,7 @@ function preloadAround(index) {
 function render({ animate = false, direction = "forward" } = {}) {
   resetZoom();
   currentIndex = Math.max(0, Math.min(pages.length - 1, spreadStart(currentIndex)));
-  const spread = isSpread();
+  const spread = isSpread() && currentIndex + 1 < pages.length;
 
   if (animate) {
     elements.book.classList.remove("changing-forward", "changing-backward");
@@ -427,6 +444,7 @@ window.addEventListener("resize", () => {
 desktopQuery.addEventListener("change", () => render());
 
 elements.fullscreen.hidden = !fullscreenSupported;
+elements.slider.max = String(pages.length);
 const requestedPage = Number(location.hash.match(/pagina-(\d+)/)?.[1]);
 if (Number.isInteger(requestedPage)) currentIndex = Math.max(0, Math.min(pages.length - 1, requestedPage - 1));
 render();
