@@ -36,7 +36,22 @@ const pages = [
   { file: "page-35.png", label: "Página 35" },
   { file: "page-36.png", label: "Página 36" },
   { file: "page-37.png", label: "Página 37" },
-  { file: "page-38.png", label: "Quarta capa" }
+  { file: "page-38.png", label: "Página 38" },
+  { file: "page-39.png", label: "Página 39" },
+  { file: "page-40.png", label: "Página 40" },
+  { file: "page-41.png", label: "Página 41" },
+  { file: "page-42.png", label: "Página 42" },
+  { file: "page-43.png", label: "Página 43" },
+  { file: "page-44.png", label: "Página 44" },
+  { file: "page-45.png", label: "Página 45" },
+  { file: "page-46.png", label: "Página 46" },
+  { file: "page-47.png", label: "Página 47" },
+  { file: "page-48.png", label: "Página 48" },
+  { file: "page-49.png", label: "Página 49" },
+  { file: "page-50.png", label: "Página 50" },
+  { file: "page-51.png", label: "Página 51" },
+  { file: "page-52.png", label: "Página 52" },
+  { file: "page-53.png", label: "Quarta capa" }
 ];
 
 const elements = {
